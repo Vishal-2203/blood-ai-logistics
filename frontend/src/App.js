@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './index.css';
+import LoginPage from './LoginPage';
 import HospitalDashboard from './components/HospitalDashboard';
 import DonorPortal from './components/DonorPortal';
 import RequestorPortal from './components/RequestorPortal';
@@ -70,9 +71,45 @@ function RaiseRequestModal({ onClose, onAdd }) {
 }
 
 export default function App() {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
   const [role, setRole] = useState('hospital');
   const [requests, setRequests] = useState(INITIAL_REQUESTS);
   const [showModal, setShowModal] = useState(false);
+
+  // Check for existing authentication on mount
+  useEffect(() => {
+    const storedUser = localStorage.getItem('user');
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        setUser(userData);
+        setRole(userData.role);
+        setIsAuthenticated(true);
+      } catch (err) {
+        console.error('Failed to parse stored user:', err);
+        localStorage.removeItem('user');
+      }
+    }
+  }, []);
+
+  const handleLogin = (selectedRole, email) => {
+    setRole(selectedRole);
+    setUser({ email, role: selectedRole });
+    setIsAuthenticated(true);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('user');
+    setUser(null);
+    setIsAuthenticated(false);
+    setRole('hospital');
+  };
+
+  // Show login page if not authenticated
+  if (!isAuthenticated) {
+    return <LoginPage onLogin={handleLogin} />;
+  }
 
   return (
     <div className={`app-shell theme-${role}`}>
@@ -115,9 +152,35 @@ export default function App() {
             <div className="page-title">{role === 'hospital' ? 'Facility Command' : role === 'donor' ? 'Life-Saver Hub' : 'Track Your Request'}</div>
             <div className="page-subtitle">{role === 'hospital' ? 'AI-driven emergency routing active' : 'Next match prediction: 85% probability'}</div>
           </div>
-          <div className="status-badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent-role)' }}>
-             <div className="pulse-glow" style={{ width: 8, height: 8, background: 'var(--accent-role)', borderRadius: '50%', marginRight: 8 }}></div>
-             Live Cloud Sync
+          <div style={{ display: 'flex', alignItems: 'center', gap: 24 }}>
+            <div className="status-badge" style={{ background: 'var(--accent-glow)', color: 'var(--accent-role)' }}>
+               <div className="pulse-glow" style={{ width: 8, height: 8, background: 'var(--accent-role)', borderRadius: '50%', marginRight: 8 }}></div>
+               Live Cloud Sync
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, borderLeft: '1px solid var(--border)', paddingLeft: 24 }}>
+              <div style={{ fontSize: '0.9rem', textAlign: 'right' }}>
+                <div style={{ fontWeight: 600 }}>{user?.email || 'User'}</div>
+                <div style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>{role.charAt(0).toUpperCase() + role.slice(1)}</div>
+              </div>
+              <button 
+                onClick={handleLogout}
+                style={{ 
+                  background: 'rgba(232,25,60,0.1)', 
+                  color: 'var(--primary)', 
+                  border: 'none', 
+                  padding: '8px 16px', 
+                  borderRadius: '8px',
+                  cursor: 'pointer',
+                  fontSize: '0.85rem',
+                  fontWeight: 600,
+                  transition: 'all 0.3s'
+                }}
+                onMouseOver={(e) => e.target.style.background = 'rgba(232,25,60,0.2)'}
+                onMouseOut={(e) => e.target.style.background = 'rgba(232,25,60,0.1)'}
+              >
+                Logout
+              </button>
+            </div>
           </div>
         </header>
 
