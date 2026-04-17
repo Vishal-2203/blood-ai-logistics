@@ -7,6 +7,42 @@ export default function AIInsights({ activeRequest, stock }) {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const generateMockInsights = () => {
+      const criticalBlood = stock?.find(s => s.units < s.min);
+      return [
+        {
+          type: 'warning',
+          icon: 'drop',
+          title: 'Critical Stock Alert',
+          description: criticalBlood 
+            ? `${criticalBlood.type} at ${criticalBlood.units}/${criticalBlood.min} units`
+            : 'All blood types above minimum threshold',
+          priority: 'high'
+        },
+        {
+          type: 'info',
+          icon: 'navigation',
+          title: 'Optimal Donor Match',
+          description: 'System recommends Ravi Kumar based on location proximity and availability',
+          priority: 'medium'
+        },
+        {
+          type: 'success',
+          icon: 'check',
+          title: 'Request Efficiency',
+          description: '2 compatible donors available within 15 min radius',
+          priority: 'low'
+        },
+        {
+          type: 'insight',
+          icon: 'clock',
+          title: 'Peak Demand Pattern',
+          description: 'Emergency requests peak at 6-9 PM. Consider advance planning',
+          priority: 'medium'
+        }
+      ];
+    };
+
     const fetchInsights = async () => {
       try {
         const response = await fetch('http://localhost:3000/ai-insights', {
@@ -34,42 +70,6 @@ export default function AIInsights({ activeRequest, stock }) {
 
     fetchInsights();
   }, [activeRequest, stock]);
-
-  const generateMockInsights = () => {
-    const criticalBlood = stock?.find(s => s.units < s.min);
-    return [
-      {
-        type: 'warning',
-        icon: 'drop',
-        title: 'Critical Stock Alert',
-        description: criticalBlood 
-          ? `${criticalBlood.type} at ${criticalBlood.units}/${criticalBlood.min} units`
-          : 'All blood types above minimum threshold',
-        priority: 'high'
-      },
-      {
-        type: 'info',
-        icon: 'navigation',
-        title: 'Optimal Donor Match',
-        description: 'System recommends Ravi Kumar based on location proximity and availability',
-        priority: 'medium'
-      },
-      {
-        type: 'success',
-        icon: 'check',
-        title: 'Request Efficiency',
-        description: '2 compatible donors available within 15 min radius',
-        priority: 'low'
-      },
-      {
-        type: 'insight',
-        icon: 'clock',
-        title: 'Peak Demand Pattern',
-        description: 'Emergency requests peak at 6-9 PM. Consider advance planning',
-        priority: 'medium'
-      }
-    ];
-  };
 
   return (
     <div className="ai-insights-panel">
@@ -115,3 +115,4 @@ export default function AIInsights({ activeRequest, stock }) {
     </div>
   );
 }
+
