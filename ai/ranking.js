@@ -1,21 +1,28 @@
 /**
- * Calculates a donor score based on multiple logistical factors.
+ * Calculates a donor score based on ML-inspired logistical factors.
  * Weights:
- * - 50% Historical Response Rate
- * - 30% Historical Reliability (Success rate)
- * - 20% Distance (Using smoother decay: 1/(1+d))
+ * - 40% Prediction (Likelihood of responding based on frequency/recency)
+ * - 30% Historical Reliability
+ * - 30% Distance Impact
  */
 
 export function calculateScore(donor) {
-  const distanceScore = 1 / (1 + (donor.distance || 0)); // smoother decay
+  // Predictive Factor: Higher frequency + more time since last donation = higher probability
+  const predictiveFactor = Math.min(1, (donor.donation_frequency * (donor.last_donation_days_ago / 365)));
+  
+  const distanceScore = 1 / (1 + (donor.distance || 0)); // Smoother decay
 
   const score =
-    0.5 * (donor.response_rate || 0) +
-    0.3 * (donor.reliability || 0.5) +
-    0.2 * distanceScore;
+    0.4 * predictiveFactor +
+    0.3 * (donor.response_rate || 0.5) +
+    0.3 * distanceScore;
 
-  return Number(score.toFixed(3));
+  return {
+    final: Number(score.toFixed(3)),
+    prediction: Number(predictiveFactor.toFixed(2)) // Output the prediction for transparency
+  };
 }
+
 
 
 /**
@@ -25,18 +32,21 @@ export function calculateScore(donor) {
 export function rankDonors(donors, urgency = "medium") {
   return donors
     .map(d => {
-      let finalScore = calculateScore(d);
+      const { final, prediction } = calculateScore(d);
+      let finalScore = final;
       
-      // If urgency is high, distance matters much more (+50% boost to score if very close)
-      if (urgency === "high" && d.distance < 2) {
-        finalScore *= 1.5;
+      // AI Logic: High urgency priority (Massive distance boost)
+      if (urgency === "high" && d.distance < 3) {
+        finalScore += 0.4;
       }
 
       return {
         ...d,
-        score: Number(finalScore.toFixed(3))
+        score: Number(Math.min(1, finalScore).toFixed(3)),
+        confidence_level: prediction > 0.7 ? "High" : "Moderate"
       };
     })
     .sort((a, b) => b.score - a.score);
 }
+
 

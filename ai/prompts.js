@@ -41,3 +41,28 @@ Current User Input:
 
 Output JSON:`;
 
+
+/**
+ * Prompt for detecting system shortages and rarity.
+ */
+export const shortagePrompt = (intent, matchedCount) => `
+You are a Medical Resource Auditor. 
+Analyze the current blood request and the available donor pool.
+
+Request: ${intent.blood_group} (Urgency: ${intent.urgency})
+Available Donors: ${matchedCount}
+
+Tasks:
+1. Is this a rare blood group (O- or AB-)?
+2. If donors are < 2, is this a critical shortage?
+3. Provide a system-level alert status: "NORMAL", "WARNING", or "CRITICAL".
+
+Output JSON:
+{
+  "is_rare": boolean,
+  "shortage_detected": boolean,
+  "alert_status": string,
+  "public_message": "Friendly but urgent message for the UI"
+}
+
+Result:`;

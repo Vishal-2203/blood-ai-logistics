@@ -1,169 +1,113 @@
-const express = require("express");
-const cors = require("cors");
+import dotenv from "dotenv";
+dotenv.config({ path: "./.env" });
+console.log("ENV KEY:", process.env.GEMINI_API_KEY);
+import express from "express";
+import cors from "cors";
+
+import { runPrompt } from "./ai/gemini.js";
+import { intentPrompt, rankingPrompt, shortagePrompt } from "./ai/prompts.js";
+import { rankDonors } from "./ai/ranking.js";
+
+
 
 const app = express();
 
-// Middleware
+
 app.use(cors());
 app.use(express.json());
 
-// Dummy Donor Data (10 entries)
+// Dummy donors
+// Enhanced Dummy Donors with Historical Data for ML/AI Scope
 const donors = [
-  {
-    name: "Ravi",
-    blood_group: "O-",
-    lat: 17.385,
-    lng: 78.486,
-    availability: true,
-    response_rate: 0.8,
+  { 
+    name: "Ravi", blood_group: "O-", lat: 17.385, lng: 78.486, 
+    last_donation_days_ago: 120, donation_frequency: 3, // Very reliable
+    response_rate: 0.95 
   },
-  {
-    name: "Anjali",
-    blood_group: "O-",
-    lat: 17.39,
-    lng: 78.48,
-    availability: true,
-    response_rate: 0.6,
+  { 
+    name: "Anjali", blood_group: "O-", lat: 17.39, lng: 78.48, 
+    last_donation_days_ago: 45, donation_frequency: 1, // Recent donor, less likely to be eligible
+    response_rate: 0.6 
   },
-  {
-    name: "Kiran",
-    blood_group: "A+",
-    lat: 17.4,
-    lng: 78.49,
-    availability: true,
-    response_rate: 0.7,
+  { 
+    name: "Meena", blood_group: "O-", lat: 17.382, lng: 78.482, 
+    last_donation_days_ago: 200, donation_frequency: 5, // Legend status
+    response_rate: 0.9 
   },
-  {
-    name: "Suresh",
-    blood_group: "B+",
-    lat: 17.37,
-    lng: 78.47,
-    availability: true,
-    response_rate: 0.5,
+  { 
+    name: "Divya", blood_group: "O-", lat: 17.388, lng: 78.478, 
+    last_donation_days_ago: 10, donation_frequency: 2, // Definitely NOT ELIGIBLE yet
+    response_rate: 0.75 
   },
-  {
-    name: "Meena",
-    blood_group: "O-",
-    lat: 17.382,
-    lng: 78.482,
-    availability: true,
-    response_rate: 0.9,
-  },
-  {
-    name: "Rahul",
-    blood_group: "AB+",
-    lat: 17.395,
-    lng: 78.495,
-    availability: false,
-    response_rate: 0.4,
-  },
-  {
-    name: "Divya",
-    blood_group: "O-",
-    lat: 17.388,
-    lng: 78.478,
-    availability: true,
-    response_rate: 0.75,
-  },
-  {
-    name: "Arjun",
-    blood_group: "A+",
-    lat: 17.41,
-    lng: 78.5,
-    availability: true,
-    response_rate: 0.65,
-  },
-  {
-    name: "Pooja",
-    blood_group: "O-",
-    lat: 17.383,
-    lng: 78.484,
-    availability: true,
-    response_rate: 0.85,
-  },
-  {
-    name: "Vikram",
-    blood_group: "B-",
-    lat: 17.36,
-    lng: 78.46,
-    availability: true,
-    response_rate: 0.55,
-  },
+  { 
+    name: "Pooja", blood_group: "O-", lat: 17.383, lng: 78.484, 
+    last_donation_days_ago: 300, donation_frequency: 1, // Rare but reliable
+    response_rate: 0.85 
+  }
 ];
 
-// Distance function
+
+// Distance
 function getDistance(lat1, lon1, lat2, lon2) {
-  return Math.sqrt(Math.pow(lat1 - lat2, 2) + Math.pow(lon1 - lon2, 2));
+  return Math.sqrt((lat1 - lat2) ** 2 + (lon1 - lon2) ** 2);
 }
 
-// POST API → Emergency Request (UPDATED 🔥)
-app.post("/request-blood", (req, res) => {
-  const { blood_group, lat, lng, urgency } = req.body;
+// 🔥 AI-powered route
+app.post("/request-blood", async (req, res) => {
+  try {
+    console.log("🚨 Request:", req.body);
 
-  console.log("🚨 Emergency Request:", req.body);
+    // 1. AI Intent
+	const intent = await runPrompt(
+  intentPrompt(req.body.text),
+  process.env.GEMINI_API_KEY
+);
+   // 2. Filter donors (Basic Eligibility: At least 90 days since last donation)
+    const matched = donors.filter(
+      (d) => d.blood_group === intent.blood_group && d.last_donation_days_ago >= 90
+    );
 
-  const matchedDonors = donors
-    .map((donor) => {
-      const distance = getDistance(lat, lng, donor.lat, donor.lng);
 
-      if (
-        donor.blood_group === blood_group &&
-        donor.availability === true &&
-        distance < 0.05
-      ) {
-        const score =
-          donor.response_rate * 50 +
-          (1 - distance) * 30 +
-          (urgency === "high" ? 20 : 10);
+    // 3. Add distance + reliability
+    const enriched = matched.map((d) => ({
+      ...d,
+      distance: getDistance(req.body.lat, req.body.lng, d.lat, d.lng),
+      reliability: d.response_rate
+    }));
 
-        // 🔥 Priority logic
-        let priority = "Medium";
-        if (score > 85) priority = "High";
-        else if (score < 60) priority = "Low";
+    // 4. Rank
+    const ranked = rankDonors(enriched, intent.urgency);
 
-        return {
-          name: donor.name,
-          distance: Number(distance.toFixed(3)),
-          score: Math.round(score),
-          eta: (distance * 100).toFixed(1) + " mins",
-          priority,
-        };
-      }
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.score - a.score);
+    // 5. AI System Health Check (Shortage Detection)
+    const systemHealth = await runPrompt(
+  shortagePrompt(intent, matched.length),
+  process.env.GEMINI_API_KEY
+);
 
-  console.log("📢 Alerts sent to donors...");
-  console.log("🏥 Hospitals notified...");
+    // 6. AI decision/Justification
+    const decision = await runPrompt(
+  rankingPrompt(ranked),
+  process.env.GEMINI_API_KEY
+);
+      
+      res.json({
+      intent,
+      system_health: systemHealth,
+      top_3_donors: ranked.slice(0, 3),
+      decision
+    });
 
-  res.json({
-    message: "Emergency request processed",
-    urgency,
-    donors_found: matchedDonors.length,
-
-    // 🔥 Top 3 donors only
-    top_3_donors: matchedDonors.slice(0, 3),
-
-    // 🔥 Decision explanation
-    decision:
-      "Top donors selected based on proximity, availability, and response history",
-  });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ error: err.message });
+  }
 });
 
-// Optional: Health API
+// Health
 app.get("/health", (req, res) => {
-  res.json({
-    status: "System Active",
-    services: ["Matching", "Prediction", "Alerts"],
-  });
+  res.json({ status: "AI system active" });
 });
 
-// Root route
-app.get("/", (req, res) => {
-  res.send("Blood Logistics Backend Running 🚀");
-});
-
-// Start server
 app.listen(3000, () => {
-  console.log("Server running on port 3000 🚀");
+  console.log("🚀 AI Backend running on port 3000");
 });
