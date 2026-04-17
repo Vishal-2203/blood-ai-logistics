@@ -82,11 +82,11 @@ export async function runPrompt(prompt, fallbackData = null) {
  * Generates a rule-based response when the AI is unavailable.
  */
 function generateFallback(data) {
-  if (data.type === "ranking" && data.donors) {
+  if (data.type === "ranking" && data.donors && data.donors.length > 0) {
     const top = data.donors[0];
     return {
-      selected_donor: top.name,
-      reason: `[Rule-Based Fallback] Selected based on highest score (${top.score}) and proximity (${top.distance}km).`
+      selected_donor: top.name || "Available Donor",
+      reason: `[Rule-Based Fallback] Selected based on highest score (${top.score || 'N/A'}) and proximity (${top.distance || 'N/A'}km).`
     };
   }
   
