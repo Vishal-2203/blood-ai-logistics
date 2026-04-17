@@ -4,23 +4,6 @@
    Design Tokens
 ══════════════════════════════════════════ */
 :root {
-  --bg-dark:          #080810;
-  --bg-surface:       #0f0f1a;
-  --bg-card:          rgba(18, 18, 30, 0.8);
-  --bg-hover:         rgba(255, 255, 255, 0.04);
-
-  --primary:          #e8193c;
-  --primary-light:    #ff3355;
-  --primary-glow:     rgba(232, 25, 60, 0.25);
-  --accent-blue:      #3b82f6;
-  --accent-green:     #10b981;
-  --accent-amber:     #f59e0b;
-  --accent-purple:    #8b5cf6;
-
-  --text-primary:     #f1f5f9;
-  --text-secondary:   #64748b;
-  --text-muted:       #334155;
-
   --border:           rgba(255, 255, 255, 0.06);
   --border-hover:     rgba(255, 255, 255, 0.12);
   --glass-gradient:   linear-gradient(135deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%);
