@@ -119,12 +119,45 @@ export default function App() {
           <span className="logo-text"><span>Blood</span>Agent</span>
         </div>
 
-        <div className="role-switcher" style={{ marginBottom: 30 }}>
-          {['hospital', 'donor', 'requestor'].map(r => (
-            <div key={r} className={`role-tab ${role === r ? 'active' : ''}`} onClick={() => setRole(r)} style={{ transition: 'all 0.3s' }}>
-              {r.charAt(0).toUpperCase()}
-            </div>
-          ))}
+        <div className="role-switcher" style={{ marginBottom: 30, display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {['hospital', 'donor', 'requestor'].map(r => {
+            const roleNames = { hospital: 'Hospital', donor: 'Donor', requestor: 'Requestor' };
+            return (
+              <div 
+                key={r} 
+                className={`role-tab ${role === r ? 'active' : ''}`} 
+                onClick={() => setRole(r)} 
+                style={{ 
+                  background: role === r ? 'rgba(79, 172, 254, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                  border: role === r ? '1.5px solid #4fac fe' : '1.5px solid rgba(255, 255, 255, 0.1)',
+                  color: role === r ? '#4fac fe' : '#fff',
+                  padding: '12px 16px',
+                  borderRadius: '10px',
+                  cursor: 'pointer',
+                  transition: 'all 0.3s ease',
+                  fontWeight: role === r ? 600 : 500,
+                  fontSize: '13px',
+                  textAlign: 'center'
+                }}
+                onMouseEnter={(e) => {
+                  if (role !== r) {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.08)';
+                    e.target.style.borderColor = 'rgba(79, 172, 254, 0.5)';
+                    e.target.style.transform = 'translateY(-2px)';
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (role !== r) {
+                    e.target.style.background = 'rgba(255, 255, 255, 0.05)';
+                    e.target.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                    e.target.style.transform = 'translateY(0)';
+                  }
+                }}
+              >
+                {roleNames[r]}
+              </div>
+            );
+          })}
         </div>
 
         {role === 'hospital' && (
