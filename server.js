@@ -8,7 +8,17 @@ import { runPrompt } from "./ai/ai.js";
 import { intentPrompt, rankingPrompt, shortagePrompt } from "./ai/prompts.js";
 import { rankDonors } from "./ai/ranking.js";
 
+import { createServer } from "http";
+import { Server } from "socket.io";
+
 const app = express();
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+  cors: {
+    origin: "*",
+    methods: ["GET", "POST"]
+  }
+});
 
 app.use(cors());
 app.use(express.json());
@@ -48,6 +58,25 @@ function getDistance(lat1, lon1, lat2, lon2) {
   return Math.sqrt((lat1 - lat2) ** 2 + (lon1 - lon2) ** 2);
 }
 
+// Socket.io handlers
+io.on("connection", (socket) => {
+  console.log("New client connected:", socket.id);
+  
+  socket.on("join_tracking", (requestId) => {
+    socket.join(requestId);
+    console.log(`Socket ${socket.id} joined tracking for ${requestId}`);
+  });
+
+  socket.on("emergency_request_raised", (data) => {
+    console.log("Emergency Broadcast:", data);
+    socket.broadcast.emit("new_emergency_alert", data);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("Client disconnected");
+  });
+});
+
 // 🔥 AI-powered route
 app.post("/request-blood", async (req, res) => {
   try {
@@ -80,6 +109,9 @@ app.post("/request-blood", async (req, res) => {
       donors: ranked 
     });
       
+    // Added: Emit event when request is processed
+    io.emit("emergency_request_raised", { type: "AI_PROCESSED", data: req.body });
+
     res.json({
       intent,
       system_health: systemHealth,
@@ -95,9 +127,9 @@ app.post("/request-blood", async (req, res) => {
 
 // Health
 app.get("/health", (req, res) => {
-  res.json({ status: "AI system active" });
+  res.json({ status: "AI system active", sockets: io.engine.clientsCount });
 });
 
-app.listen(3000, () => {
-  console.log("🚀 AI Backend running on port 3000");
+httpServer.listen(3000, () => {
+  console.log("SYSTEM START: ENTERPRISE AI BACKEND ON PORT 3000");
 });

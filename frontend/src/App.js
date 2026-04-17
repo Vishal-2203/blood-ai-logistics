@@ -5,7 +5,10 @@ import io from 'socket.io-client';
 import axios from 'axios';
 import './index.css';
 
-const socket = io('http://localhost:3000');
+const socket = io('http://localhost:3000', {
+  transports: ['websocket', 'polling'],
+  reconnection: true
+});
 
 // Fix leaflet default icon
 delete L.Icon.Default.prototype._getIconUrl;
