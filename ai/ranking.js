@@ -1,31 +1,22 @@
 /**
  * Calculates a donor score based on multiple logistical factors.
  * Weights:
- * - 40% Distance (Inversely proportional)
- * - 30% Historical Response Rate
- * - 20% Historical Reliability (Successful donations)
- * - 10% Recency factor (Simplified)
+ * - 50% Historical Response Rate
+ * - 30% Historical Reliability (Success rate)
+ * - 20% Distance (Using smoother decay: 1/(1+d))
  */
+
 export function calculateScore(donor) {
-  const DISTANCE_WEIGHT = 0.4;
-  const RESPONSE_RATE_WEIGHT = 0.3;
-  const RELIABILITY_WEIGHT = 0.3;
+  const distanceScore = 1 / (1 + (donor.distance || 0)); // smoother decay
 
-  // Handle distance edge case (prevent Infinity)
-  const distanceFactor = 1 / (Math.max(donor.distance, 0.1));
-  
-  // Normalize response rate and reliability (assume 0-1)
-  const responseRate = donor.response_rate || 0;
-  const reliability = donor.reliability || 0.5; // Default if not provided
-
-  const score = (
-    DISTANCE_WEIGHT * distanceFactor +
-    RESPONSE_RATE_WEIGHT * responseRate +
-    RELIABILITY_WEIGHT * reliability
-  );
+  const score =
+    0.5 * (donor.response_rate || 0) +
+    0.3 * (donor.reliability || 0.5) +
+    0.2 * distanceScore;
 
   return Number(score.toFixed(3));
 }
+
 
 /**
  * Ranks a list of donors based on calculated scores.
