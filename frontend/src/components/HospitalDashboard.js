@@ -32,7 +32,8 @@ export default function HospitalDashboard({
   focusedDonorId,
   onFocusDonor,
   onUpdateRequestLocation,
-  onNotice
+  onNotice,
+  onFetchDonorsNear
 }) {
   const [pickMode, setPickMode] = useState(false);
   const criticalCount = requests.filter((request) => request.urgency === 'Critical').length;
@@ -43,6 +44,7 @@ export default function HospitalDashboard({
     lat: Number(activeRequest?.lat ?? 28.567),
     lng: Number(activeRequest?.lng ?? 77.21)
   };
+  const [showRadarModal, setShowRadarModal] = useState(false);
 
   const handleUseMyLocation = () => {
     if (!activeRequest?.id) {
@@ -63,6 +65,7 @@ export default function HospitalDashboard({
           lng,
           location: 'Pinned (My Location)'
         });
+        onFetchDonorsNear?.(lat, lng);
         setPickMode(false);
       },
       (error) => {
@@ -210,7 +213,35 @@ export default function HospitalDashboard({
         <div className="hospital-side-column">
           <AIInsights activeRequest={activeRequest} stock={stock} authToken={authToken} />
 
-          <DemandRadar authToken={authToken} center={radarCenter} onNotice={onNotice} />
+          <div className="glass-panel demand-radar-summary" style={{ padding: 12 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <div className="section-kicker">Demand Radar</div>
+                <div style={{ fontWeight: 700, marginTop: 6 }}>Forecast & outreach</div>
+              </div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button type="button" className="btn btn-ghost btn-small" onClick={() => setShowRadarModal(true)}>
+                  <Icon d={icons.navigation} size={14} /> Open
+                </button>
+                <button type="button" className="btn btn-ghost btn-small" onClick={() => void (radarCenter && onNotice?.('Radar center set', 'info'))}>
+                  <Icon d={icons.clock} size={14} /> Center
+                </button>
+              </div>
+            </div>
+            <div className="queue-meta" style={{ marginTop: 8 }}>Open the full radar for forecast, incidents, and outreach targets.</div>
+          </div>
+
+          {showRadarModal && (
+            <div className="modal-backdrop" onClick={() => setShowRadarModal(false)}>
+              <div className="modal glass-panel" onClick={(e) => e.stopPropagation()} style={{ width: 'min(960px, 96%)' }}>
+                <div className="modal-title">Demand Radar <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--text-secondary)' }}>Forecast & incidents</span></div>
+                <DemandRadar authToken={authToken} center={radarCenter} onNotice={onNotice} />
+                <div className="modal-actions" style={{ marginTop: 16, display: 'flex', justifyContent: 'flex-end' }}>
+                  <button type="button" className="btn btn-ghost" onClick={() => setShowRadarModal(false)}>Close</button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="glass-panel request-queue-panel">
             <div className="request-panel-header">

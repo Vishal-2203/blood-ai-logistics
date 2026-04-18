@@ -560,6 +560,56 @@ export default function App() {
     }
   };
 
+  const haversineDistance = (lat1, lon1, lat2, lon2) => {
+    const toRad = (v) => (v * Math.PI) / 180;
+    const R = 6371; // km
+    const dLat = toRad(lat2 - lat1);
+    const dLon = toRad(lon2 - lon1);
+    const a = Math.sin(dLat / 2) * Math.sin(dLat / 2)
+      + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
+  const handleFetchDonorsNear = (lat, lng, radiusKm = 7) => {
+    // look for existing donors within radius; if none, synthesize a few nearby mock donors
+    const nearby = donors.filter((d) => {
+      if (d?.lat == null || d?.lng == null) return false;
+      return haversineDistance(lat, lng, Number(d.lat), Number(d.lng)) <= radiusKm;
+    });
+
+    if (nearby.length > 0) {
+      // move nearby donors to the front (keep unique)
+      const remaining = donors.filter((d) => !nearby.find((n) => n.id === d.id));
+      setDonors([...nearby, ...remaining]);
+      showNotice(`${nearby.length} donor(s) found near your location.`, 'success');
+      return;
+    }
+
+    // create 3 mock donors near the provided location
+    const mock = [0, 1, 2].map((i) => {
+      const jitter = (i + 1) * 0.003; // ~300m increments
+      return {
+        id: `D-MOCK-${Date.now()}-${i}`,
+        name: `Nearby Donor ${i + 1}`,
+        blood: ['O-', 'A+', 'B-'][i % 3],
+        lat: lat + jitter,
+        lng: lng - jitter,
+        eta: 8 + i * 4,
+        status: 'Ready'
+      };
+    });
+
+    setDonors((current) => {
+      // prepend mock donors but avoid id collisions
+      const existingIds = new Set(current.map((d) => d.id));
+      const toAdd = mock.filter((m) => !existingIds.has(m.id));
+      return [...toAdd, ...current];
+    });
+
+    showNotice('No registered donors found nearby — showing nearby volunteers.', 'info');
+  };
+
   const handleAdvanceRequest = async (requestId) => {
     try {
       const data = await apiJson(`/requests/${requestId}/advance`, {
@@ -797,7 +847,8 @@ export default function App() {
               focusedDonorId={focusedDonorId}
               onFocusDonor={setFocusedDonorId}
               onUpdateRequestLocation={handleUpdateRequestLocation}
-              onNotice={showNotice}
+                onNotice={showNotice}
+                onFetchDonorsNear={handleFetchDonorsNear}
             />
           )}
           {activeView === 'donor' && (

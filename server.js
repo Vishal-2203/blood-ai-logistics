@@ -463,6 +463,101 @@ io.on("connection", (socket) => {
   });
 });
 
+// Legacy `/api/*` compatibility layer:
+// An earlier prototype used `/api/requests` etc. When this backend also serves the SPA build,
+// unknown GET routes fall back to `index.html`, which can cause `response.json()` crashes
+// ("Unexpected token '<'") if the client accidentally hits an HTML page. These routes ensure
+// `/api/*` always returns JSON.
+app.get("/api/health", (req, res) => {
+  void req;
+  res.json({ status: "active", message: "Blood Agent API is online." });
+});
+
+app.get("/api/requests", (req, res) => {
+  void req;
+  res.json({ success: true, data: store.listRequests() });
+});
+
+app.post("/api/requests", (req, res) => {
+  try {
+    const normalizedBody = {
+      ...req.body,
+      // Accept both legacy `unitsRequired` and newer `units` naming.
+      units: req.body?.units ?? req.body?.unitsRequired ?? 1,
+      bloodGroup: req.body?.bloodGroup ?? req.body?.blood_group ?? req.body?.blood ?? req.body?.type
+    };
+
+    const requestDraft = parseRequestBody(normalizedBody);
+
+    if (!requestDraft.bloodGroup) {
+      return res.status(400).json({ success: false, error: "Invalid blood group." });
+    }
+
+    const requestRecord = store.createRequest({
+      id: `REQ-${Date.now().toString().slice(-6)}`,
+      patient: requestDraft.patient,
+      blood: requestDraft.bloodGroup,
+      units: requestDraft.units,
+      fulfilled: 0,
+      urgency: requestDraft.urgency,
+      status: "Broadcasting",
+      donorStatus: "pending",
+      location: requestDraft.location,
+      lat: requestDraft.lat,
+      lng: requestDraft.lng,
+      ai_data: null,
+      createdBy: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
+    });
+
+    emitRequestCreated(requestRecord);
+
+    return res.status(201).json({
+      success: true,
+      message: "Request broadcasted successfully.",
+      data: requestRecord
+    });
+  } catch (err) {
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+app.get("/api/requests/:id", (req, res) => {
+  const request = store.getRequestById(req.params.id);
+  if (!request) {
+    return res.status(404).json({ success: false, error: "Request not found." });
+  }
+
+  return res.json({ success: true, data: request });
+});
+
+app.patch("/api/requests/:id/status", (req, res) => {
+  const request = store.getRequestById(req.params.id);
+  if (!request) {
+    return res.status(404).json({ success: false, error: "Request not found." });
+  }
+
+  const status = sanitizeName(req.body?.status, request.status);
+  const fulfilled = clampNumber(req.body?.fulfilled, { min: 0, max: request.units }) ?? request.fulfilled;
+  const donorStatus = sanitizeName(req.body?.donorStatus, request.donorStatus);
+
+  const updatedRequest = store.saveRequest({
+    ...request,
+    status,
+    fulfilled,
+    donorStatus,
+    updatedAt: new Date().toISOString()
+  });
+
+  emitRequestUpdated(updatedRequest);
+  return res.json({ success: true, data: updatedRequest });
+});
+
+app.use("/api", (req, res) => {
+  res.status(404).json({ success: false, error: "Unknown API route." });
+});
+
 app.post("/register", (req, res) => {
   try {
     const role = String(req.body?.role || "").trim();
