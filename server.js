@@ -1,113 +1,123 @@
-import dotenv from "dotenv";
-dotenv.config({ path: "./.env" });
-console.log("ENV KEY:", process.env.GEMINI_API_KEY);
-import express from "express";
-import cors from "cors";
-
-import { runPrompt } from "./ai/gemini.js";
-import { intentPrompt, rankingPrompt, shortagePrompt } from "./ai/prompts.js";
-import { rankDonors } from "./ai/ranking.js";
-
-
+const express = require("express");
+const cors = require("cors");
+const donors = require("./donors.json");
 
 const app = express();
-
 
 app.use(cors());
 app.use(express.json());
 
-// Dummy donors
-// Enhanced Dummy Donors with Historical Data for ML/AI Scope
-const donors = [
-  { 
-    name: "Ravi", blood_group: "O-", lat: 17.385, lng: 78.486, 
-    last_donation_days_ago: 120, donation_frequency: 3, // Very reliable
-    response_rate: 0.95 
-  },
-  { 
-    name: "Anjali", blood_group: "O-", lat: 17.39, lng: 78.48, 
-    last_donation_days_ago: 45, donation_frequency: 1, // Recent donor, less likely to be eligible
-    response_rate: 0.6 
-  },
-  { 
-    name: "Meena", blood_group: "O-", lat: 17.382, lng: 78.482, 
-    last_donation_days_ago: 200, donation_frequency: 5, // Legend status
-    response_rate: 0.9 
-  },
-  { 
-    name: "Divya", blood_group: "O-", lat: 17.388, lng: 78.478, 
-    last_donation_days_ago: 10, donation_frequency: 2, // Definitely NOT ELIGIBLE yet
-    response_rate: 0.75 
-  },
-  { 
-    name: "Pooja", blood_group: "O-", lat: 17.383, lng: 78.484, 
-    last_donation_days_ago: 300, donation_frequency: 1, // Rare but reliable
-    response_rate: 0.85 
-  }
-];
+const PORT = 5000;
 
+console.log("📦 Backend loading...");
 
-// Distance
-function getDistance(lat1, lon1, lat2, lon2) {
-  return Math.sqrt((lat1 - lat2) ** 2 + (lon1 - lon2) ** 2);
-}
-
-// 🔥 AI-powered route
-app.post("/request-blood", async (req, res) => {
-  try {
-    console.log("🚨 Request:", req.body);
-
-    // 1. AI Intent
-	const intent = await runPrompt(
-  intentPrompt(req.body.text),
-  process.env.GEMINI_API_KEY
-);
-   // 2. Filter donors (Basic Eligibility: At least 90 days since last donation)
-    const matched = donors.filter(
-      (d) => d.blood_group === intent.blood_group && d.last_donation_days_ago >= 90
-    );
-
-
-    // 3. Add distance + reliability
-    const enriched = matched.map((d) => ({
-      ...d,
-      distance: getDistance(req.body.lat, req.body.lng, d.lat, d.lng),
-      reliability: d.response_rate
-    }));
-
-    // 4. Rank
-    const ranked = rankDonors(enriched, intent.urgency);
-
-    // 5. AI System Health Check (Shortage Detection)
-    const systemHealth = await runPrompt(
-  shortagePrompt(intent, matched.length),
-  process.env.GEMINI_API_KEY
-);
-
-    // 6. AI decision/Justification
-    const decision = await runPrompt(
-  rankingPrompt(ranked),
-  process.env.GEMINI_API_KEY
-);
-      
-      res.json({
-      intent,
-      system_health: systemHealth,
-      top_3_donors: ranked.slice(0, 3),
-      decision
-    });
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
+// -------------------------------
+// HOME ROUTE
+// -------------------------------
+app.get("/", (req, res) => {
+  res.send("🚑 Blood Logistics Backend is Running");
 });
 
-// Health
-app.get("/health", (req, res) => {
-  res.json({ status: "AI system active" });
+// -------------------------------
+// GET ALL DONORS
+// -------------------------------
+app.get("/api/donors", (req, res) => {
+  res.json({
+    total: donors.length,
+    donors,
+  });
 });
 
-app.listen(3000, () => {
-  console.log("🚀 AI Backend running on port 3000");
+// -------------------------------
+// GET DONOR BY ID
+// -------------------------------
+app.get("/api/donors/:id", (req, res) => {
+  const donor = donors.find((d) => d.id == req.params.id);
+
+  if (!donor) {
+    return res.status(404).json({ message: "Donor not found" });
+  }
+
+  res.json(donor);
+});
+
+// -------------------------------
+// MATCH DONORS (CORE FEATURE)
+// -------------------------------
+app.post("/api/match/donors", (req, res) => {
+  const { bloodGroup, lat, lng } = req.body;
+
+  if (!bloodGroup || !lat || !lng) {
+    return res.status(400).json({ message: "Missing required fields" });
+  }
+
+  // distance formula (Haversine simplified)
+  function distance(lat1, lon1, lat2, lon2) {
+    const R = 6371;
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  }
+
+  const matches = donors
+    .filter((d) => d.bloodGroup === bloodGroup && d.available === true)
+    .map((d) => {
+      const dist = distance(lat, lng, d.location.lat, d.location.lng);
+      return { ...d, distance: dist.toFixed(2) };
+    })
+    .sort((a, b) => a.distance - b.distance)
+    .slice(0, 5);
+
+  res.json({
+    count: matches.length,
+    matches,
+  });
+});
+
+// -------------------------------
+// BASIC DONOR RESPONSE PREDICTION
+// -------------------------------
+app.post("/api/predict", (req, res) => {
+  const { donorId, distance } = req.body;
+
+  const donor = donors.find((d) => d.id == donorId);
+
+  if (!donor) {
+    return res.status(404).json({ message: "Donor not found" });
+  }
+
+  // simple scoring model
+  let score = 100;
+
+  if (distance > 10) score -= 30;
+  if (!donor.available) score -= 50;
+
+  const lastDonationDate = new Date(donor.lastDonation);
+  const monthsSince =
+    (new Date() - lastDonationDate) / (1000 * 60 * 60 * 24 * 30);
+
+  if (monthsSince < 3) score -= 20;
+
+  if (score < 0) score = 0;
+
+  res.json({
+    donorId,
+    responseProbability: score,
+  });
+});
+
+// -------------------------------
+// START SERVER
+// -------------------------------
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on http://localhost:${PORT}`);
 });
