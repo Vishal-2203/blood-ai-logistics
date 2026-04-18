@@ -8,11 +8,11 @@
     "dev": "node server.js",
     "test": "npm run verify",
     "test:backend": "node --test tests/server.test.js",
-    "test:ai": "npm test --prefix ai",
-    "test:frontend": "node scripts/run-frontend-tests.mjs",
+    "test:ai": "node scripts/ai-smoke.mjs",
+    "test:frontend": "cmd /c \"cd frontend && set CI=true&& npm.cmd test -- --watchAll=false\"",
     "build:frontend": "npm run build --prefix frontend",
     "verify:live-ai": "node scripts/verify-live-ai.mjs",
-    "verify": "node scripts/verify-pipeline.mjs"
+    "verify": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/verify-pipeline.ps1"
   },
   "keywords": [],
   "author": "",
