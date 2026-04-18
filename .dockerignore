@@ -1,0 +1,9 @@
+node_modules
+npm-debug.log*
+frontend/node_modules
+ai/node_modules
+frontend/build
+data/*.sqlite
+data/*.sqlite-*
+.git
+.github

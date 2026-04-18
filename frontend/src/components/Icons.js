@@ -3,6 +3,7 @@ import React from 'react';
 export const icons = {
   dashboard: "M4 5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5zm10 0a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1V5zM4 14a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-5zm10-2a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v7a1 1 0 0 1-1 1h-4a1 1 0 0 1-1-1v-7z",
   requests: "M22 12h-4l-3 9L9 3l-3 9H2",
+  history: "M3 12a9 9 0 1 0 3-6.71M3 4v5h5M12 7v5l3 3",
   inventory: "M18 20V10M12 20V4M6 20v-6",
   plus: "M12 5v14M5 12h14",
   drop: "M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z",
@@ -18,7 +19,7 @@ export const icons = {
   x: "M18 6L6 18M6 6l12 12"
 };
 
-export const Icon = ({ d, size = 18, color = 'currentColor', className = '' }) => (
+export const Icon = ({ d, size = 18, color = 'currentColor', className = '', style = {}, ...props }) => (
   <svg
     width={size}
     height={size}
@@ -29,7 +30,8 @@ export const Icon = ({ d, size = 18, color = 'currentColor', className = '' }) =
     strokeWidth="2"
     strokeLinecap="round"
     strokeLinejoin="round"
-    style={{ display: 'inline-block', verticalAlign: 'middle' }}
+    style={{ display: 'inline-block', verticalAlign: 'middle', ...style }}
+    {...props}
   >
     <path d={d} />
   </svg>

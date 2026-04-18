@@ -116,10 +116,35 @@
   margin: 0 0 32px 0;
 }
 
+.auth-mode-toggle {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 24px;
+}
+
+.auth-mode-button {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 10px 12px;
+  transition: all 0.3s ease;
+}
+
+.auth-mode-button.active {
+  background: rgba(79, 172, 254, 0.14);
+  border-color: rgba(79, 172, 254, 0.8);
+  color: #4facfe;
+}
+
 .back-button {
   background: none;
   border: none;
-  color: #4fac fe;
+  color: #4facfe;
   font-size: 14px;
   cursor: pointer;
   padding: 0;
@@ -153,7 +178,7 @@
 
 .role-option:hover {
   background: rgba(255, 255, 255, 0.08);
-  border-color: #4fac fe;
+  border-color: #4facfe;
   transform: translateY(-4px);
 }
 
@@ -166,7 +191,7 @@
   align-items: center;
   justify-content: center;
   margin: 0 auto 12px;
-  color: #4fac fe;
+  color: #4facfe;
 }
 
 .role-option h3 {
@@ -222,7 +247,7 @@
 .form-input:focus {
   outline: none;
   background: rgba(255, 255, 255, 0.1);
-  border-color: #4fac fe;
+  border-color: #4facfe;
   box-shadow: 0 0 0 3px rgba(79, 172, 254, 0.1);
 }
 
@@ -238,6 +263,18 @@
   display: flex;
   align-items: center;
   gap: 4px;
+}
+
+.auth-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(232, 25, 60, 0.12);
+  border: 1px solid rgba(232, 25, 60, 0.3);
+  border-radius: 10px;
+  color: #ff8e9f;
+  font-size: 12px;
+  padding: 10px 12px;
 }
 
 .btn-login {

@@ -10,7 +10,10 @@ const test = async () => {
     const input = "Need O- blood urgently near Mumbai";
     console.log(`User Input: "${input}"`);
     
-    const intent = await runPrompt(intentPrompt(input), { type: "intent" });
+    const intent = await runPrompt(intentPrompt(input), {
+      type: "intent",
+      text: input
+    });
     console.log("Extracted Intent:", intent);
 
     // 2. Mock donors with predictive factors
@@ -43,7 +46,12 @@ const test = async () => {
 
     // 3. Status Audit
     console.log("Running System Audit...");
-    const audit = await runPrompt(shortagePrompt(intent, donors.length), { type: "audit" });
+    const audit = await runPrompt(shortagePrompt(intent, donors.length), {
+      type: "audit",
+      intent,
+      matchedCount: donors.length,
+      bloodGroup: intent.blood_group
+    });
     console.log("Audit Report:", audit);
 
     // 4. Ranking (logic)
