@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Icon, icons } from './Icons';
 import AIInsights from './AIInsights';
 import LiveMap from './LiveMap';
+import DemandRadar from './DemandRadar';
 
 function buildRecommendations(activeRequest, donors) {
   if (activeRequest?.ai_data?.top_3_donors?.length) {
@@ -38,6 +39,10 @@ export default function HospitalDashboard({
   const pendingUnits = requests.reduce((total, request) => total + Math.max(0, request.units - request.fulfilled), 0);
   const shortageCount = stock.filter((item) => item.units < item.min).length;
   const recommendations = buildRecommendations(activeRequest, donors);
+  const radarCenter = {
+    lat: Number(activeRequest?.lat ?? 28.567),
+    lng: Number(activeRequest?.lng ?? 77.21)
+  };
 
   const handleUseMyLocation = () => {
     if (!activeRequest?.id) {
@@ -204,6 +209,8 @@ export default function HospitalDashboard({
 
         <div className="hospital-side-column">
           <AIInsights activeRequest={activeRequest} stock={stock} authToken={authToken} />
+
+          <DemandRadar authToken={authToken} center={radarCenter} onNotice={onNotice} />
 
           <div className="glass-panel request-queue-panel">
             <div className="request-panel-header">

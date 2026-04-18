@@ -80,6 +80,27 @@ function getDistance(lat1, lon1, lat2, lon2) {
   return Math.sqrt((lat1 - lat2) ** 2 + (lon1 - lon2) ** 2);
 }
 
+function clampNumber(value, { min = Number.NEGATIVE_INFINITY, max = Number.POSITIVE_INFINITY } = {}) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) {
+    return null;
+  }
+
+  return Math.min(max, Math.max(min, numeric));
+}
+
+function kmDistance(lat1, lng1, lat2, lng2) {
+  // Haversine distance in km.
+  const toRad = (deg) => (deg * Math.PI) / 180;
+  const R = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(a));
+}
+
 function sanitizeName(value, fallback) {
   const cleaned = String(value || "").trim();
   return cleaned || fallback;
@@ -106,6 +127,129 @@ function parseRequestBody(body = {}) {
         `${body.urgency || normalizedUrgency} request for ${units} unit${units > 1 ? "s" : ""} of ${bloodGroup || "blood"} for ${patient} at ${location}`
     )
   };
+}
+
+function startOfDayIso(date) {
+  const d = new Date(date);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
+function listDays(count, { endDate = new Date() } = {}) {
+  const days = [];
+  const end = new Date(endDate);
+  end.setHours(0, 0, 0, 0);
+  for (let i = count - 1; i >= 0; i -= 1) {
+    const d = new Date(end);
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+  return days;
+}
+
+function weekdayIndex(date) {
+  // 0=Mon..6=Sun
+  const js = new Date(date).getDay(); // 0=Sun..6=Sat
+  return (js + 6) % 7;
+}
+
+function forecastDemand({ events, stock, incidents, center, days = 14 }) {
+  const historyWindowDays = 56;
+  const historyDays = listDays(historyWindowDays, { endDate: new Date() });
+  const historyStart = historyDays[0].toISOString();
+
+  const relevantEvents = events.filter((event) => event.createdAt >= historyStart);
+  const bloodGroups = stock.map((item) => item.type);
+
+  const incidentMultiplier = (blood, date) => {
+    void blood;
+    const when = new Date(date).toISOString();
+    const affecting = incidents.filter((inc) => inc.startsAt <= when && inc.endsAt >= when);
+    const nearby = affecting.filter((inc) => kmDistance(center.lat, center.lng, inc.lat, inc.lng) <= inc.radiusKm);
+    if (nearby.length === 0) {
+      return 1;
+    }
+
+    const totalSeverity = nearby.reduce((sum, inc) => sum + Math.max(1, Math.min(5, Number(inc.severity) || 1)), 0);
+    return Math.min(1.6, 1 + totalSeverity * 0.08);
+  };
+
+  const buildSeries = (blood) => {
+    const daily = new Map(historyDays.map((d) => [startOfDayIso(d), 0]));
+    relevantEvents
+      .filter((e) => e.blood === blood)
+      .forEach((e) => {
+        const key = startOfDayIso(e.createdAt);
+        daily.set(key, (daily.get(key) || 0) + Number(e.units || 0));
+      });
+
+    return historyDays.map((d) => ({
+      date: startOfDayIso(d),
+      units: daily.get(startOfDayIso(d)) || 0
+    }));
+  };
+
+  const forecastOne = (blood) => {
+    const series = buildSeries(blood);
+    const values = series.map((p) => p.units);
+
+    const alpha = 0.35;
+    let ewma = values[0] ?? 0;
+    for (const v of values) {
+      ewma = alpha * v + (1 - alpha) * ewma;
+    }
+
+    const weekdayTotals = Array.from({ length: 7 }, () => ({ sum: 0, count: 0 }));
+    series.forEach((p) => {
+      const w = weekdayIndex(p.date);
+      weekdayTotals[w].sum += p.units;
+      weekdayTotals[w].count += 1;
+    });
+    const overallAvg = values.reduce((a, b) => a + b, 0) / Math.max(1, values.length);
+    const weekdayFactor = weekdayTotals.map((w) => {
+      if (!w.count) return 1;
+      const avg = w.sum / w.count;
+      return overallAvg > 0 ? Math.max(0.6, Math.min(1.6, avg / overallAvg)) : 1;
+    });
+
+    const last7 = values.slice(-7).reduce((a, b) => a + b, 0);
+    const prev7 = values.slice(-14, -7).reduce((a, b) => a + b, 0);
+    const trend = prev7 > 0 ? Math.max(0.7, Math.min(1.5, last7 / prev7)) : 1;
+
+    const forecastDays = listDays(days, { endDate: new Date(Date.now() + days * 24 * 60 * 60 * 1000) }).slice(-days);
+    const points = forecastDays.map((d) => {
+      const base = ewma * weekdayFactor[weekdayIndex(d)] * trend;
+      const adjusted = base * incidentMultiplier(blood, d);
+      return {
+        date: startOfDayIso(d),
+        units: Number(Math.max(0, adjusted).toFixed(2))
+      };
+    });
+
+    const avgDaily = points.reduce((a, b) => a + b.units, 0) / Math.max(1, points.length);
+    return { history: series.slice(-28), forecast: points, avgDaily: Number(avgDaily.toFixed(2)) };
+  };
+
+  const demand = bloodGroups.map((blood) => {
+    const stockItem = stock.find((s) => s.type === blood);
+    const model = forecastOne(blood);
+    const unitsOnHand = Number(stockItem?.units ?? 0);
+    const minTarget = Number(stockItem?.min ?? 0);
+    const daysToStockout = model.avgDaily > 0 ? Number((unitsOnHand / model.avgDaily).toFixed(1)) : null;
+    const reorderNow = unitsOnHand < minTarget || (daysToStockout !== null && daysToStockout <= 7);
+
+    return {
+      blood,
+      stock: { units: unitsOnHand, min: minTarget },
+      avgDaily: model.avgDaily,
+      daysToStockout,
+      reorderNow,
+      history: model.history,
+      forecast: model.forecast
+    };
+  });
+
+  return demand;
 }
 
 function buildInsights(activeRequest, stock = store.listStock()) {
@@ -394,6 +538,94 @@ app.post("/ai-insights", requireAuth, (req, res) => {
   res.json({ insights: buildInsights(activeRequest, stock) });
 });
 
+app.get("/forecast", requireAuth, requireRole("hospital", "requestor"), (req, res) => {
+  const days = Math.max(7, Math.min(30, Number(req.query.days || 14) || 14));
+  const lat = clampNumber(req.query.lat, { min: -90, max: 90 }) ?? 28.567;
+  const lng = clampNumber(req.query.lng, { min: -180, max: 180 }) ?? 77.21;
+
+  const events = store.listDemandEvents();
+  const incidents = store.listIncidents({ activeOnly: true });
+  const stock = store.listStock();
+
+  const demand = forecastDemand({
+    events,
+    incidents,
+    stock,
+    center: { lat, lng },
+    days
+  });
+
+  const actionPlan = demand
+    .map((item) => ({
+      blood: item.blood,
+      reorderNow: item.reorderNow,
+      risk: item.daysToStockout !== null && item.daysToStockout <= 3 ? "Critical" : item.reorderNow ? "High" : "Normal",
+      suggestedTarget: Math.max(item.stock.min, Math.ceil(item.avgDaily * 10)),
+      shortage: Math.max(0, Math.ceil(Math.max(item.stock.min, item.avgDaily * 10) - item.stock.units))
+    }))
+    .sort((a, b) => (a.risk === b.risk ? b.shortage - a.shortage : a.risk === "Critical" ? -1 : b.risk === "Critical" ? 1 : a.risk === "High" ? -1 : 1));
+
+  const donors = store.listDonors();
+  const outreach = actionPlan
+    .filter((p) => p.risk !== "Normal")
+    .slice(0, 3)
+    .map((p) => {
+      const eligible = donors
+        .filter((d) => d.blood === p.blood && d.last_donation_days_ago >= 90)
+        .map((d) => ({
+          ...d,
+          distance: kmDistance(lat, lng, d.lat, d.lng)
+        }));
+      const ranked = rankDonors(eligible, "high").slice(0, 5);
+      return { blood: p.blood, donors: ranked };
+    });
+
+  res.json({
+    center: { lat, lng },
+    days,
+    incidents,
+    demand,
+    actionPlan,
+    outreach
+  });
+});
+
+app.get("/incidents", requireAuth, requireRole("hospital", "requestor"), (req, res) => {
+  const activeOnly = String(req.query.active || "1") !== "0";
+  res.json({ incidents: store.listIncidents({ activeOnly }) });
+});
+
+app.post("/incidents", requireAuth, requireRole("hospital", "requestor"), (req, res) => {
+  const title = sanitizeName(req.body?.title, "Incident");
+  const severity = clampNumber(req.body?.severity, { min: 1, max: 5 }) ?? 3;
+  const radiusKm = clampNumber(req.body?.radiusKm, { min: 1, max: 120 }) ?? 15;
+  const lat = clampNumber(req.body?.lat, { min: -90, max: 90 });
+  const lng = clampNumber(req.body?.lng, { min: -180, max: 180 });
+  const location = sanitizeName(req.body?.location, "Unknown area");
+  const startsAt = sanitizeName(req.body?.startsAt, new Date().toISOString());
+  const endsAt = sanitizeName(req.body?.endsAt, new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString());
+  const notes = String(req.body?.notes || "").trim();
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    return res.status(400).json({ error: "Please provide valid numeric lat/lng values." });
+  }
+
+  const incident = store.createIncident({
+    title,
+    severity,
+    radiusKm,
+    location,
+    lat,
+    lng,
+    startsAt,
+    endsAt,
+    notes,
+    createdBy: req.user.id
+  });
+
+  res.status(201).json({ incident });
+});
+
 app.post("/ai/verify-live", requireAuth, requireRole("hospital", "requestor"), async (req, res) => {
   try {
     const verification = await verifyLiveGeminiPath();
@@ -476,6 +708,18 @@ app.post("/request-blood", requireAuth, requireRole("hospital", "requestor"), as
       createdBy: req.user.id,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
+    });
+
+    store.recordDemandEvent({
+      blood: requestRecord.blood,
+      units: requestRecord.units,
+      urgency: requestRecord.urgency,
+      status: requestRecord.status,
+      location: requestRecord.location,
+      lat: requestRecord.lat,
+      lng: requestRecord.lng,
+      createdBy: req.user.id,
+      createdAt: requestRecord.createdAt
     });
 
     emitRequestCreated(requestRecord);
@@ -666,6 +910,8 @@ if (hasFrontendBuild) {
       req.path.startsWith("/register") ||
       req.path.startsWith("/session") ||
       req.path.startsWith("/ai") ||
+      req.path.startsWith("/forecast") ||
+      req.path.startsWith("/incidents") ||
       req.path.startsWith("/request-blood") ||
       req.path.startsWith("/requests") ||
       req.path.startsWith("/socket.io")
